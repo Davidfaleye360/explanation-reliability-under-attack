@@ -1,0 +1,9 @@
+torch>=2.1
+torchvision>=0.16
+torchattacks>=3.5
+grad-cam>=1.5
+scikit-image>=0.22
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+pandas>=2.1
