@@ -162,11 +162,3 @@ Steps:
 
 **Done when:** Repo is clean and fully reproducible from `README.md` instructions; final report and video are complete.
 **Evidence for report:** Final charts/tables, full gallery, complete written analysis, polished GitHub repo link, video.
-
-## 4. Notes for Claude Code
-
-- Work checkpoint by checkpoint, in order; do not skip ahead to later checkpoints' metrics or analysis before earlier steps are validated.
-- Keep the six attack configurations and three metrics fixed — do not add scope.
-- The SSIM-based deceptive threshold from Checkpoint 3 must not change once set in Checkpoint 3.
-- Prefer small, frequent commits over large batched ones, so commit history reflects real incremental progress (useful for progress-report evidence).
-- Save all generated tables/charts/images into `results/` in the structure above so each progress report can point directly to specific files.
