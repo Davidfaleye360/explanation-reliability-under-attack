@@ -29,7 +29,7 @@ CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
 CIFAR10_STD = (0.2470, 0.2435, 0.2616)
 
 
-def get_dataloaders(batch_size: int, num_workers: int = 2):
+def get_dataloaders(batch_size: int, num_workers: int = 0):
     train_transform = transforms.Compose(
         [
             transforms.RandomCrop(32, padding=4),
@@ -84,9 +84,13 @@ def main():
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
     print(f"Using device: {device}")
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
