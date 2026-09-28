@@ -111,7 +111,9 @@ def main():
     gallery_dir.mkdir(parents=True, exist_ok=True)
 
     num_classes = len(test_set.classes)
-    fig, axes = plt.subplots(num_classes, 2, figsize=(4, 2 * num_classes))
+    classes_per_row = 2
+    num_rows = -(-num_classes // classes_per_row)  # ceil division
+    fig, axes = plt.subplots(num_rows, classes_per_row * 2, figsize=(2 * classes_per_row * 2, 2 * num_rows))
 
     with GradCAM(model=model, target_layers=get_target_layers(model)) as cam:
         for class_idx in range(num_classes):
@@ -120,17 +122,19 @@ def main():
             overlay = overlay_heatmap(image_tensor, heatmap)
             original = unnormalize_image(image_tensor)
 
-            axes[class_idx, 0].imshow(original)
-            axes[class_idx, 0].set_ylabel(test_set.classes[class_idx], fontsize=9)
-            axes[class_idx, 0].set_xticks([])
-            axes[class_idx, 0].set_yticks([])
+            row = class_idx // classes_per_row
+            col_pair = class_idx % classes_per_row
+            orig_col, cam_col = col_pair * 2, col_pair * 2 + 1
 
-            axes[class_idx, 1].imshow(overlay)
-            axes[class_idx, 1].set_xticks([])
-            axes[class_idx, 1].set_yticks([])
+            axes[row, orig_col].imshow(original)
+            axes[row, orig_col].set_title(test_set.classes[class_idx], fontsize=9)
+            axes[row, orig_col].set_xticks([])
+            axes[row, orig_col].set_yticks([])
 
-    axes[0, 0].set_title("Original", fontsize=10)
-    axes[0, 1].set_title("Grad-CAM overlay", fontsize=10)
+            axes[row, cam_col].imshow(overlay)
+            axes[row, cam_col].set_xticks([])
+            axes[row, cam_col].set_yticks([])
+
     fig.tight_layout()
     fig.savefig(gallery_dir / "gradcam_samples.png", dpi=150)
     print(f"Saved sample gallery to {gallery_dir / 'gradcam_samples.png'}")
