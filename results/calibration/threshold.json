@@ -1,0 +1,19 @@
+{
+  "threshold": 0.9802430186574981,
+  "percentile": 25,
+  "rule": "an adversarial example's explanation is 'deceptive' if SSIM(clean heatmap, adversarial heatmap) >= threshold",
+  "noise_type": "random_sign",
+  "noise_eps": 0.01,
+  "noise_seed": 0,
+  "split_seed": 0,
+  "num_calibration_pool": 1000,
+  "num_pairs": 905,
+  "num_pred_changed_by_noise": 13,
+  "ssim_mean": 0.9689745180071614,
+  "ssim_median": 0.993758995945637,
+  "ssim_min": -0.1764458948117965,
+  "ssim_max": 0.9999007806622771,
+  "checkpoint_epoch": 28,
+  "checkpoint_test_acc": 0.9103,
+  "created_utc": "2026-10-06T14:29:19+00:00"
+}

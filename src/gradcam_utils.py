@@ -18,7 +18,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from torchvision import datasets, transforms
 
-from src.model import build_resnet18_cifar
+from src.model import load_trained_model
 from src.train import CHECKPOINT_DIR, DATA_DIR, CIFAR10_MEAN, CIFAR10_STD
 
 GALLERY_DIR_NAME = "gallery"
@@ -52,19 +52,30 @@ def compute_gradcam(cam, image_tensor, device, target_category=None):
     return grayscale_cam[0]
 
 
+def normalize_images(images_01, mean=CIFAR10_MEAN, std=CIFAR10_STD):
+    """Normalize a BCHW batch of [0, 1] images into the form the model was trained on."""
+    mean_t = torch.tensor(mean, device=images_01.device).view(1, 3, 1, 1)
+    std_t = torch.tensor(std, device=images_01.device).view(1, 3, 1, 1)
+    return (images_01 - mean_t) / std_t
+
+
+def compute_gradcam_batch(cam, images_01, device, target_categories=None):
+    """Grad-CAM heatmaps for a BCHW batch of [0, 1] images (normalization is applied here).
+
+    target_categories: optional per-image class indices; None explains each image's own top prediction.
+    Returns a (B, H, W) numpy array of heatmaps in [0, 1].
+    """
+    targets = None
+    if target_categories is not None:
+        targets = [ClassifierOutputTarget(int(c)) for c in target_categories]
+    input_batch = normalize_images(images_01.to(device))
+    return cam(input_tensor=input_batch, targets=targets)
+
+
 def overlay_heatmap(image_tensor, heatmap, mean=CIFAR10_MEAN, std=CIFAR10_STD):
     """Overlay a grayscale Grad-CAM heatmap on the original (unnormalized) image."""
     rgb_image = unnormalize_image(image_tensor, mean, std)
     return show_cam_on_image(rgb_image, heatmap, use_rgb=True)
-
-
-def _load_model(device):
-    model = build_resnet18_cifar(num_classes=10)
-    checkpoint = torch.load(CHECKPOINT_DIR / "resnet18_cifar10.pt", map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.to(device)
-    model.eval()
-    return model, checkpoint
 
 
 def _pick_one_correct_image_per_class(model, test_set, device):
@@ -98,7 +109,7 @@ def main():
         device = torch.device(args.device)
     print(f"Using device: {device}")
 
-    model, checkpoint = _load_model(device)
+    model, checkpoint = load_trained_model(CHECKPOINT_DIR / "resnet18_cifar10.pt", device)
     print(f"Loaded checkpoint from epoch {checkpoint['epoch']}, test_acc={checkpoint['test_acc']:.4f}")
 
     test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD)])
