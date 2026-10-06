@@ -1,0 +1,10 @@
+# Checkpoint 1 validation run (pipeline sanity check, run by the project author in their own terminal)
+# Command:   python -m src.train --epochs 2 --device mps
+# Settings:  same as the 30-epoch run (Adam, lr=1e-3, batch_size=128, RandomCrop+HorizontalFlip)
+# Machine:   Apple M2 MacBook Air, device=mps
+# Run date:  2026-09-09
+# Provenance: lines transcribed from the author's terminal output; CIFAR-10 download progress bar omitted (19 min at ~149 kB/s).
+Using device: mps
+Epoch   1/2 | train_loss=1.3787 train_acc=0.4967 | test_loss=1.0773 test_acc=0.6190 | 139.9s
+Epoch   2/2 | train_loss=0.8976 train_acc=0.6814 | test_loss=0.8519 test_acc=0.7168 | 149.2s
+Best test accuracy: 0.7168

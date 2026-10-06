@@ -26,3 +26,19 @@ def load_trained_model(checkpoint_path, device):
     model.to(device)
     model.eval()
     return model, checkpoint
+
+
+class NormalizedModel(nn.Module):
+    """Wraps a classifier so it accepts [0, 1] pixel images and normalizes them internally.
+
+    Attack libraries assume [0, 1] inputs, so epsilon keeps its pixel-scale meaning.
+    """
+
+    def __init__(self, model, mean, std):
+        super().__init__()
+        self.model = model
+        self.register_buffer("mean", torch.tensor(mean).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(std).view(1, 3, 1, 1))
+
+    def forward(self, images_01):
+        return self.model((images_01 - self.mean) / self.std)

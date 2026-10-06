@@ -9,6 +9,8 @@ Logs per-epoch train/test loss and accuracy to stdout and saves:
 """
 
 import argparse
+import platform
+import sys
 import time
 from pathlib import Path
 
@@ -24,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 CHECKPOINT_DIR = ROOT / "results" / "checkpoints"
 CHARTS_DIR = ROOT / "results" / "charts"
+LOGS_DIR = ROOT / "results" / "logs"
 
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
 CIFAR10_STD = (0.2470, 0.2435, 0.2616)
@@ -85,16 +88,32 @@ def main():
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"])
+    parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    torch.manual_seed(args.seed)
 
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     else:
         device = torch.device(args.device)
-    print(f"Using device: {device}")
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = LOGS_DIR / f"train_{args.epochs}epochs.log"
+    log_path.write_text(
+        f"# Command:  python -m src.train {' '.join(sys.argv[1:])}\n"
+        f"# Settings: Adam, lr={args.lr}, batch_size={args.batch_size}, seed={args.seed}, "
+        "augmentation=RandomCrop(32, pad=4)+HorizontalFlip\n"
+        f"# Machine:  {platform.platform()}, Python {platform.python_version()}, torch {torch.__version__}\n"
+    )
+
+    def log(line):
+        print(line)
+        with open(log_path, "a") as f:
+            f.write(line + "\n")
+
+    log(f"Using device: {device}")
 
     train_loader, test_loader = get_dataloaders(args.batch_size)
 
@@ -116,7 +135,7 @@ def main():
         history["test_loss"].append(test_loss)
         history["test_acc"].append(test_acc)
 
-        print(
+        log(
             f"Epoch {epoch:3d}/{args.epochs} | "
             f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} | "
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} | "
@@ -130,7 +149,7 @@ def main():
                 CHECKPOINT_DIR / "resnet18_cifar10.pt",
             )
 
-    print(f"Best test accuracy: {best_test_acc:.4f}")
+    log(f"Best test accuracy: {best_test_acc:.4f}")
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     axes[0].plot(history["train_loss"], label="train")

@@ -1,0 +1,39 @@
+# Full training run used for the Checkpoint 2 classifier (checkpoint = epoch 28, best test accuracy)
+# Command:   python -m src.train --epochs 30 --device mps
+# Settings:  ResNet-18 (CIFAR stem), Adam, lr=1e-3, batch_size=128, augmentation=RandomCrop(32, pad=4)+HorizontalFlip, no LR schedule
+# Machine:   Apple M2 MacBook Air, device=mps, Python 3.13.1, torch 2.14.0, torchvision 0.29.0
+# Run date:  2026-09-27 (started ~17:26 local)
+# Seed:      none (this run predates the --seed option, so it cannot be reproduced bit-for-bit)
+# Provenance: epoch lines transcribed verbatim from the terminal output of this run; download progress-bar lines omitted.
+Using device: mps
+Epoch   1/30 | train_loss=1.3431 train_acc=0.5087 | test_loss=1.1265 test_acc=0.6016 | 147.3s
+Epoch   2/30 | train_loss=0.8742 train_acc=0.6918 | test_loss=0.7653 test_acc=0.7354 | 139.1s
+Epoch   3/30 | train_loss=0.6832 train_acc=0.7622 | test_loss=0.7131 test_acc=0.7606 | 182.0s
+Epoch   4/30 | train_loss=0.5717 train_acc=0.7992 | test_loss=0.6995 test_acc=0.7695 | 172.8s
+Epoch   5/30 | train_loss=0.5007 train_acc=0.8276 | test_loss=0.5739 test_acc=0.8123 | 187.0s
+Epoch   6/30 | train_loss=0.4432 train_acc=0.8468 | test_loss=0.4964 test_acc=0.8327 | 186.5s
+Epoch   7/30 | train_loss=0.3976 train_acc=0.8628 | test_loss=0.4685 test_acc=0.8415 | 320.4s
+Epoch   8/30 | train_loss=0.3663 train_acc=0.8720 | test_loss=0.4480 test_acc=0.8537 | 241.4s
+Epoch   9/30 | train_loss=0.3327 train_acc=0.8853 | test_loss=0.4589 test_acc=0.8506 | 237.3s
+Epoch  10/30 | train_loss=0.3051 train_acc=0.8944 | test_loss=0.3914 test_acc=0.8694 | 178.4s
+Epoch  11/30 | train_loss=0.2808 train_acc=0.9027 | test_loss=0.4098 test_acc=0.8684 | 195.5s
+Epoch  12/30 | train_loss=0.2578 train_acc=0.9113 | test_loss=0.4046 test_acc=0.8719 | 198.8s
+Epoch  13/30 | train_loss=0.2403 train_acc=0.9168 | test_loss=0.4146 test_acc=0.8701 | 289.3s
+Epoch  14/30 | train_loss=0.2234 train_acc=0.9225 | test_loss=0.3722 test_acc=0.8835 | 198.9s
+Epoch  15/30 | train_loss=0.2067 train_acc=0.9287 | test_loss=0.3925 test_acc=0.8774 | 191.4s
+Epoch  16/30 | train_loss=0.1930 train_acc=0.9334 | test_loss=0.3056 test_acc=0.9030 | 202.1s
+Epoch  17/30 | train_loss=0.1762 train_acc=0.9374 | test_loss=0.4072 test_acc=0.8742 | 163.8s
+Epoch  18/30 | train_loss=0.1644 train_acc=0.9425 | test_loss=0.3740 test_acc=0.8895 | 179.0s
+Epoch  19/30 | train_loss=0.1529 train_acc=0.9462 | test_loss=0.3756 test_acc=0.8947 | 168.9s
+Epoch  20/30 | train_loss=0.1470 train_acc=0.9486 | test_loss=0.3257 test_acc=0.9033 | 164.6s
+Epoch  21/30 | train_loss=0.1382 train_acc=0.9522 | test_loss=0.3330 test_acc=0.9045 | 174.5s
+Epoch  22/30 | train_loss=0.1279 train_acc=0.9539 | test_loss=0.3240 test_acc=0.9062 | 159.9s
+Epoch  23/30 | train_loss=0.1191 train_acc=0.9574 | test_loss=0.3259 test_acc=0.9088 | 178.9s
+Epoch  24/30 | train_loss=0.1140 train_acc=0.9599 | test_loss=0.3506 test_acc=0.9043 | 196.0s
+Epoch  25/30 | train_loss=0.1059 train_acc=0.9630 | test_loss=0.3829 test_acc=0.9013 | 196.1s
+Epoch  26/30 | train_loss=0.0998 train_acc=0.9650 | test_loss=0.3626 test_acc=0.9062 | 212.8s
+Epoch  27/30 | train_loss=0.0937 train_acc=0.9662 | test_loss=0.3636 test_acc=0.9064 | 207.5s
+Epoch  28/30 | train_loss=0.0908 train_acc=0.9677 | test_loss=0.3624 test_acc=0.9103 | 194.3s
+Epoch  29/30 | train_loss=0.0823 train_acc=0.9713 | test_loss=0.3513 test_acc=0.9100 | 161.6s
+Epoch  30/30 | train_loss=0.0816 train_acc=0.9706 | test_loss=0.3647 test_acc=0.9088 | 163.0s
+Best test accuracy: 0.9103
