@@ -58,9 +58,9 @@ def predict_batches(model, images_01, device):
     return torch.cat(predictions)
 
 
-def run_attack(attack, images_01, labels, device, eps):
-    """Attack every image; returns (adversarial predictions, largest per-pixel change observed)."""
-    adv_predictions = []
+def generate_adversarial(attack, images_01, labels, device, eps):
+    """Attack every image. Returns (adversarial images on CPU, adversarial predictions, largest per-pixel change)."""
+    adv_images, adv_predictions = [], []
     max_linf = 0.0
     for start in range(0, len(images_01), BATCH_SIZE):
         batch = images_01[start : start + BATCH_SIZE].to(device)
@@ -71,9 +71,16 @@ def run_attack(attack, images_01, labels, device, eps):
             raise RuntimeError("Adversarial images left the valid [0, 1] pixel range")
         with torch.no_grad():
             adv_predictions.append(attack.model(adv).argmax(dim=1).cpu())
+        adv_images.append(adv.cpu())
     if max_linf > eps + 1e-5:
         raise RuntimeError(f"Attack exceeded its budget: max |change| = {max_linf:.5f} > eps = {eps}")
-    return torch.cat(adv_predictions), max_linf
+    return torch.cat(adv_images), torch.cat(adv_predictions), max_linf
+
+
+def run_attack(attack, images_01, labels, device, eps):
+    """Adversarial predictions and largest per-pixel change (images are discarded)."""
+    _, adv_predictions, max_linf = generate_adversarial(attack, images_01, labels, device, eps)
+    return adv_predictions, max_linf
 
 
 def evaluate_config(name, eps, model, images_01, labels, clean_pred, device):
