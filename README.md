@@ -13,7 +13,7 @@ The full plan, hypotheses and checkpoint schedule are in [PROJECT_PLAN.md](PROJE
 | 1. Pipeline + short training test | Done |
 | 2. Full training (91.03% test accuracy) + Grad-CAM sanity gallery | Done |
 | 3. Attack evaluation + locked deceptive-explanation threshold | Done |
-| 4. Full attack, explain, compare pipeline on a subset | Not started |
+| 4. Attack, explain, compare pipeline on a 1,000-image subset | Done |
 | 5. Full-scale results and analysis | Not started |
 | 6. Final polish, conclusions, video | Not started |
 
@@ -38,6 +38,7 @@ python -m src.train --epochs 30 --device mps        # train, writes results/chec
 python -m src.gradcam_utils --device mps            # Grad-CAM sanity gallery -> results/gallery/
 python -m src.calibration --device mps              # noise-floor SSIM + locked threshold -> results/calibration/
 python -m src.attacks --device mps                  # six attack configurations -> results/tables/attack_results.csv
+python -m src.pipeline --subset-size 1000 --device mps   # attack, explain, compare -> results/tables/, results/gallery/
 ```
 
 `--device` can be `cuda`, `mps` or `cpu`. The checkpoint (`results/checkpoints/resnet18_cifar10.pt`, ~45 MB) is not committed; train it with the first command.
@@ -60,6 +61,11 @@ python -m src.attacks --device mps                  # six attack configurations 
 | Explained class | The model's own top-1 prediction for the image being explained |
 | SSIM | `skimage.metrics.structural_similarity`, `data_range=1.0`, default 7x7 uniform window, on the 32x32 heatmaps (primary metric) |
 | Noise-floor calibration | 905 correctly classified calibration images (of 1,000), each paired with a copy plus random +/-0.01 sign noise per pixel channel (same per-pixel size as an FGSM step at eps 0.01, random direction), clipped to [0, 1]. Noise seed 0 |
+| Pipeline subset | The first 1,000 evaluation images (never a calibration image). Only images classified correctly before the attack and misclassified after it (successful attacks) are compared |
+| Heatmaps compared | Clean image: heatmap for its (correct) top-1 class. Attacked image: heatmap for the model's top-1 prediction on the attacked image, i.e. the wrong class the model now reports. The same rule was used in calibration |
+| IoU (supporting) | Top 20% of pixels of each heatmap: pixels at or above the 80th percentile of that heatmap's own values (same fixed rule for every heatmap). If that percentile is 0, only pixels with positive intensity are kept. IoU = intersection / union of the two masks; NaN if both masks are empty |
+| Correlation (supporting) | Pearson correlation between the two full flattened 32x32 heatmaps; NaN if either heatmap is constant. NaN cases are counted in the summary table, not hidden |
+| Role of the metrics | Only SSIM against the locked threshold decides "deceptive". IoU and correlation only corroborate it |
 | Deceptive threshold | 25th percentile of the noise-floor SSIM distribution = **0.9802**. An attacked example's explanation counts as deceptive if its SSIM to the clean heatmap is >= 0.9802. Fixed before any attack was run; the script will not overwrite `results/calibration/threshold.json` |
 
 ## Results so far
@@ -79,7 +85,28 @@ python -m src.attacks --device mps                  # six attack configurations 
 | PGD | 0.03 | 100% | 0.0% | 8,198 |
 | PGD | 0.05 | 100% | 0.0% | 8,198 |
 
-Every configuration has far more than the 500 successfully attacked images the plan requires. The explanation-similarity results for these attacked images come in Checkpoints 4 and 5.
+Every configuration has far more than the 500 successfully attacked images the plan requires.
+
+**Explanation similarity on a 1,000-image subset** (`results/tables/pipeline_n1000_summary.csv`, per-image values in `pipeline_n1000_per_image.csv`). For each successfully attacked image, the clean heatmap is compared with the heatmap of the attacked image. 903 of the 1,000 images were classified correctly before attack; 5,050 attacked images were compared across the six configurations. "Deceptive" means SSIM >= 0.9802 (the locked threshold).
+
+| Attack | Epsilon | Attacked images | SSIM mean | SSIM median | IoU mean | Pearson mean | Deceptive |
+|---|---|---|---|---|---|---|---|
+| FGSM | 0.01 | 709 | 0.525 | 0.580 | 0.394 | 0.562 | 0 (0.0%) |
+| FGSM | 0.03 | 822 | 0.487 | 0.532 | 0.366 | 0.511 | 0 (0.0%) |
+| FGSM | 0.05 | 826 | 0.439 | 0.484 | 0.341 | 0.466 | 0 (0.0%) |
+| PGD | 0.01 | 887 | 0.627 | 0.685 | 0.440 | 0.657 | 2 (0.2%) |
+| PGD | 0.03 | 903 | 0.653 | 0.694 | 0.459 | 0.689 | 1 (0.1%) |
+| PGD | 0.05 | 903 | 0.646 | 0.683 | 0.455 | 0.682 | 0 (0.0%) |
+
+No IoU or correlation value was undefined. Example before/after pairs, chosen by fixed rules (highest, median and lowest SSIM), are in `results/gallery/attack_examples_n1000.png`, including one deceptive case.
+
+Descriptive observations (subset only; no significance tests or confidence intervals yet, those come in Checkpoint 5):
+
+- Attacked explanations are far less similar to the clean ones (median SSIM 0.48 to 0.69) than explanations under random noise of the same per-pixel size (median 0.994).
+- FGSM: mean SSIM falls as epsilon rises (0.525, 0.487, 0.439). PGD shows no downward trend (0.627, 0.653, 0.646).
+- At every epsilon, PGD explanations stay more similar to the clean ones than FGSM explanations do.
+- Only 3 of 5,050 attacked explanations (0.06%) reach the deceptive threshold, all from PGD. Pairs with SSIM >= 0.9 are more common for PGD (5.6% to 7.0%) than FGSM (0.6% to 3.0%).
+- IoU and correlation order the configurations the same way SSIM does.
 
 ## Limitations
 
@@ -88,7 +115,9 @@ Every configuration has far more than the 500 successfully attacked images the p
 - One dataset, one model, two attacks, three strengths. Conclusions apply to this controlled setting only.
 - The deployed checkpoint came from an unseeded training run (the `--seed` option was added afterwards), so retraining will give slightly different numbers.
 - The checkpoint epoch was selected by test accuracy on the same test set that supplies the calibration and evaluation images, so the reported test accuracy is slightly optimistic.
-- The threshold depends on the chosen noise model (random sign noise at 0.01). A different noise model would give a different threshold.
+- The threshold depends on the chosen noise model (random sign noise at 0.01).
+- The pipeline results so far use a 1,000-image subset and a single attack seed, with no confidence intervals.
+- The explained class for an attacked image is the model's (wrong) top-1 prediction. Heatmaps for the original class under attack were not examined. A different noise model would give a different threshold.
 
 ## Repository layout
 
@@ -96,9 +125,10 @@ Every configuration has far more than the 500 successfully attacked images the p
 src/model.py          ResNet-18 for CIFAR, checkpoint loading, input-normalizing wrapper
 src/train.py          training script (writes checkpoint, chart, log)
 src/gradcam_utils.py  Grad-CAM wrapper and sanity gallery
-src/metrics.py        SSIM (IoU and correlation arrive in Checkpoint 4)
+src/metrics.py        SSIM (primary), IoU of top regions and Pearson correlation (supporting)
 src/calibration.py    held-out split, noise-floor distribution, locked threshold
 src/attacks.py        FGSM/PGD evaluation
+src/pipeline.py       attack -> explain -> compare, deceptive flag against the locked threshold
 results/              logs, charts, gallery, calibration, tables (checkpoint weights are not committed)
 reports/              progress reports
 ```
