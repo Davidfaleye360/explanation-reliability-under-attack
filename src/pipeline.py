@@ -73,15 +73,22 @@ def compare_config(name, eps, attack_model, raw_model, images, labels, clean_pre
         "pearson": pearson_batch(clean_hm, adv_heatmaps),
         "deceptive": ssim >= threshold,
     })
+    rows = {
+        "max": int(np.argmax(ssim)),
+        "min": int(np.argmin(ssim)),
+        "median": int(np.argmin(np.abs(ssim - np.median(ssim)))),
+    }
     kept = {
-        "positions": positions,
-        "clean_images": images[positions],
-        "adv_images": adv_images[positions],
-        "clean_heatmaps": clean_hm,
-        "adv_heatmaps": adv_heatmaps,
-        "ssim": ssim,
-        "label": labels.numpy()[positions],
-        "adv_pred": adv_pred.numpy()[positions],
+        tag: {
+            "clean_image": images[positions[i]],
+            "adv_image": adv_images[positions[i]],
+            "clean_heatmap": clean_hm[i],
+            "adv_heatmap": adv_heatmaps[i],
+            "ssim": float(ssim[i]),
+            "label": int(labels[positions[i]]),
+            "adv_pred": int(adv_pred[positions[i]]),
+        }
+        for tag, i in rows.items()
     }
     return per_image, kept
 
@@ -117,29 +124,26 @@ def overlay(image_chw, heatmap):
 def pick_examples(kept_by_config):
     """Rule-based picks (no hand selection): overall most and least similar, and the median example of three configs."""
     picks = []
-    all_rows = [(key, i, s) for key, k in kept_by_config.items() for i, s in enumerate(k["ssim"])]
-    key, i, _ = max(all_rows, key=lambda r: r[2])
-    picks.append(("Highest SSIM overall", key, i))
+    key = max(kept_by_config, key=lambda k: kept_by_config[k]["max"]["ssim"])
+    picks.append(("Highest SSIM overall", key, kept_by_config[key]["max"]))
     for key in [("FGSM", 0.01), ("PGD", 0.01), ("PGD", 0.05)]:
-        ssim = kept_by_config[key]["ssim"]
-        picks.append(("Median SSIM", key, int(np.argmin(np.abs(ssim - np.median(ssim))))))
-    key, i, _ = min(all_rows, key=lambda r: r[2])
-    picks.append(("Lowest SSIM overall", key, i))
+        picks.append(("Median SSIM", key, kept_by_config[key]["median"]))
+    key = min(kept_by_config, key=lambda k: kept_by_config[k]["min"]["ssim"])
+    picks.append(("Lowest SSIM overall", key, kept_by_config[key]["min"]))
     return picks
 
 
 def save_examples(kept_by_config, class_names, threshold, path):
     picks = pick_examples(kept_by_config)
     fig, axes = plt.subplots(len(picks), 4, figsize=(8.5, 2.35 * len(picks)))
-    for row, (kind, key, i) in enumerate(picks):
-        k = kept_by_config[key]
-        ssim = k["ssim"][i]
+    for row, (kind, key, example) in enumerate(picks):
+        ssim = example["ssim"]
         verdict = "deceptive" if ssim >= threshold else "not deceptive"
         panels = [
-            (k["clean_images"][i].permute(1, 2, 0).numpy(), f"clean: {class_names[k['label'][i]]}"),
-            (overlay(k["clean_images"][i], k["clean_heatmaps"][i]), "clean Grad-CAM"),
-            (k["adv_images"][i].permute(1, 2, 0).numpy(), f"attacked: {class_names[k['adv_pred'][i]]}"),
-            (overlay(k["adv_images"][i], k["adv_heatmaps"][i]), f"{key[0]} eps={key[1]}  SSIM={ssim:.3f}\n{verdict}"),
+            (example["clean_image"].permute(1, 2, 0).numpy(), f"clean: {class_names[example['label']]}"),
+            (overlay(example["clean_image"], example["clean_heatmap"]), "clean Grad-CAM"),
+            (example["adv_image"].permute(1, 2, 0).numpy(), f"attacked: {class_names[example['adv_pred']]}"),
+            (overlay(example["adv_image"], example["adv_heatmap"]), f"{key[0]} eps={key[1]}  SSIM={ssim:.3f}\n{verdict}"),
         ]
         for col, (picture, title) in enumerate(panels):
             axes[row, col].imshow(picture)
