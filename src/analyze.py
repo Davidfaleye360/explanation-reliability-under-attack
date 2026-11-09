@@ -4,6 +4,7 @@ Reads results/tables/pipeline_n{N}_per_image.csv (one row per successfully attac
   results/tables/analysis_n{N}_summary.csv           per-configuration statistics with 95% confidence intervals
   results/tables/analysis_n{N}_hypothesis_tests.csv  paired comparisons for H1 (strength) and H2 (attack type)
   results/tables/analysis_n{N}_deceptive_cases.csv   every attacked explanation at or above the locked threshold
+  results/tables/analysis_n{N}_exploratory_*.csv     post-hoc class-pair tables (see below)
   results/charts/*_n{N}.png                          charts
 
 Statistical choices (fixed in code before the full-scale results existed):
@@ -14,6 +15,8 @@ Statistical choices (fixed in code before the full-scale results existed):
     each hypothesis. Effect sizes and intervals matter more than p-values: with thousands of images, tiny
     differences become "significant".
   - Deceptive rates carry exact (Clopper-Pearson) 95% intervals.
+  - EXPLORATORY (added after the full-scale results were seen, not part of the pre-set plan): per class-pair tables, and
+    a comparison of truck<->automobile confusions against all other successful attacks.
   - The locked SSIM threshold is the only rule that decides "deceptive". Shares of pairs above other SSIM values
     are reported as descriptive context only.
 
@@ -46,6 +49,7 @@ ALPHA = 0.05
 COLORS = {"FGSM": "#2a78d6", "PGD": "#eb6834"}
 SURFACE, INK, INK_SECONDARY, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1"
 EPSILONS = (0.01, 0.03, 0.05)
+CLASS_NAMES = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
 
 def bootstrap_mean_ci(values, rng):
@@ -125,6 +129,30 @@ def hypothesis_tests(per_image, rng):
     table = pd.DataFrame(rows + h2_rows)
     table["interval_excludes_zero"] = (table["ci_low"] > 0) | (table["ci_high"] < 0)
     return table
+
+
+def class_pair_table(per_image, threshold):
+    """Exploratory: for every (true class, attacked class) pair, how many attacks and how similar the explanations stay."""
+    frame = per_image.assign(true_class=per_image["label"].map(dict(enumerate(CLASS_NAMES))),
+                             attacked_class=per_image["adv_pred"].map(dict(enumerate(CLASS_NAMES))))
+    table = frame.groupby(["true_class", "attacked_class"]).agg(
+        attacked_images=("ssim", "size"), median_ssim=("ssim", "median"),
+        deceptive_count=("ssim", lambda v: int((v >= threshold).sum())),
+    ).reset_index()
+    return table.sort_values("attacked_images", ascending=False)
+
+
+def vehicle_pair_comparison(per_image, threshold):
+    """Exploratory: truck<->automobile confusions versus every other successful attack."""
+    is_pair = ((per_image["label"] == 9) & (per_image["adv_pred"] == 1)) | ((per_image["label"] == 1) & (per_image["adv_pred"] == 9))
+    rows = []
+    for name, frame in (("truck<->automobile", per_image[is_pair]), ("all other attacks", per_image[~is_pair])):
+        deceptive = int((frame["ssim"] >= threshold).sum())
+        low, high = clopper_pearson(deceptive, len(frame))
+        rows.append({"group": name, "attacked_images": len(frame), "share_of_all_attacks": len(frame) / len(per_image),
+                     "median_ssim": frame["ssim"].median(), "deceptive_count": deceptive, "deceptive_rate": deceptive / len(frame),
+                     "deceptive_ci_low": low, "deceptive_ci_high": high})
+    return pd.DataFrame(rows)
 
 
 def style_axes(ax):
@@ -275,6 +303,9 @@ def main():
     summary.to_csv(TABLES_DIR / f"analysis_{tag}_summary.csv", index=False)
     tests.to_csv(TABLES_DIR / f"analysis_{tag}_hypothesis_tests.csv", index=False)
     cases.to_csv(TABLES_DIR / f"analysis_{tag}_deceptive_cases.csv", index=False)
+    class_pair_table(per_image, threshold).to_csv(TABLES_DIR / f"analysis_{tag}_exploratory_class_pairs.csv", index=False)
+    vehicles = vehicle_pair_comparison(per_image, threshold)
+    vehicles.to_csv(TABLES_DIR / f"analysis_{tag}_exploratory_vehicle_pair.csv", index=False)
 
     chart_ssim_vs_epsilon(summary, threshold, CHARTS_DIR / f"ssim_vs_epsilon_{tag}.png")
     chart_distributions(per_image, threshold, CHARTS_DIR / f"ssim_distributions_{tag}.png")
@@ -288,6 +319,8 @@ def main():
     print()
     print(tests[["hypothesis", "comparison", "paired_images", "mean_difference", "ci_low", "ci_high", "holm_p"]].round(4).to_string(index=False))
     print(f"\nDeceptive cases: {len(cases)} rows, {cases['subset_position'].nunique()} distinct images")
+    print("\nExploratory (post hoc):")
+    print(vehicles.round(5).to_string(index=False))
 
 
 if __name__ == "__main__":

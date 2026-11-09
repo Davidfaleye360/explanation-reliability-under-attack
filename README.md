@@ -14,7 +14,7 @@ The full plan, hypotheses and checkpoint schedule are in [PROJECT_PLAN.md](PROJE
 | 2. Full training (91.03% test accuracy) + Grad-CAM sanity gallery | Done |
 | 3. Attack evaluation + locked deceptive-explanation threshold | Done |
 | 4. Attack, explain, compare pipeline on a 1,000-image subset | Done |
-| 5. Full-scale results and analysis | Not started |
+| 5. Full-scale results, analysis and first-draft interpretation | Done |
 | 6. Final polish, conclusions, video | Not started |
 
 ## Setup
@@ -38,7 +38,8 @@ python -m src.train --epochs 30 --device mps        # train, writes results/chec
 python -m src.gradcam_utils --device mps            # Grad-CAM sanity gallery -> results/gallery/
 python -m src.calibration --device mps              # noise-floor SSIM + locked threshold -> results/calibration/
 python -m src.attacks --device mps                  # six attack configurations -> results/tables/attack_results.csv
-python -m src.pipeline --subset-size 1000 --device mps   # attack, explain, compare -> results/tables/, results/gallery/
+python -m src.pipeline --subset-size 9000 --device mps   # attack, explain, compare (use 1000 for a quick subset) -> results/tables/, results/gallery/
+python -m src.analyze --n 9000                      # tables with intervals, hypothesis tests, charts -> results/tables/, results/charts/
 ```
 
 `--device` can be `cuda`, `mps` or `cpu`. The checkpoint (`results/checkpoints/resnet18_cifar10.pt`, ~45 MB) is not committed; train it with the first command.
@@ -87,26 +88,39 @@ python -m src.pipeline --subset-size 1000 --device mps   # attack, explain, comp
 
 Every configuration has far more than the 500 successfully attacked images the plan requires.
 
-**Explanation similarity on a 1,000-image subset** (`results/tables/pipeline_n1000_summary.csv`, per-image values in `pipeline_n1000_per_image.csv`). For each successfully attacked image, the clean heatmap is compared with the heatmap of the attacked image. 903 of the 1,000 images were classified correctly before attack; 5,050 attacked images were compared across the six configurations. "Deceptive" means SSIM >= 0.9802 (the locked threshold).
+**Explanation similarity at full scale** (all 9,000 evaluation images; per-image values in `results/tables/pipeline_n9000_per_image.csv`, statistics in `results/tables/analysis_n9000_*.csv`, charts in `results/charts/`). For each successfully attacked image, the clean heatmap is compared with the heatmap of the attacked image. 8,198 images were classified correctly before attack; 45,779 attacked image-configuration pairs were compared across the six configurations. Brackets are 95% bootstrap intervals (10,000 resamples). "Deceptive" means SSIM >= 0.9802 (the locked threshold), with exact 95% intervals on the rate.
 
-| Attack | Epsilon | Attacked images | SSIM mean | SSIM median | IoU mean | Pearson mean | Deceptive |
+| Attack | Epsilon | Attacked images | SSIM mean [95% CI] | SSIM median | IoU mean | Pearson mean | Deceptive (rate; exact 95% interval) |
 |---|---|---|---|---|---|---|---|
-| FGSM | 0.01 | 709 | 0.525 | 0.580 | 0.394 | 0.562 | 0 (0.0%) |
-| FGSM | 0.03 | 822 | 0.487 | 0.532 | 0.366 | 0.511 | 0 (0.0%) |
-| FGSM | 0.05 | 826 | 0.439 | 0.484 | 0.341 | 0.466 | 0 (0.0%) |
-| PGD | 0.01 | 887 | 0.627 | 0.685 | 0.440 | 0.657 | 2 (0.2%) |
-| PGD | 0.03 | 903 | 0.653 | 0.694 | 0.459 | 0.689 | 1 (0.1%) |
-| PGD | 0.05 | 903 | 0.646 | 0.683 | 0.455 | 0.682 | 0 (0.0%) |
+| FGSM | 0.01 | 6,362 | 0.512 [0.505, 0.518] | 0.568 | 0.383 | 0.542 | 0 (0.000%; 0.000% to 0.058%) |
+| FGSM | 0.03 | 7,479 | 0.493 [0.486, 0.499] | 0.546 | 0.372 | 0.522 | 0 (0.000%; 0.000% to 0.049%) |
+| FGSM | 0.05 | 7,531 | 0.440 [0.433, 0.446] | 0.488 | 0.342 | 0.463 | 1 (0.013%; 0.000% to 0.074%) |
+| PGD | 0.01 | 8,011 | 0.628 [0.623, 0.633] | 0.682 | 0.444 | 0.655 | 5 (0.062%; 0.020% to 0.146%) |
+| PGD | 0.03 | 8,198 | 0.655 [0.651, 0.660] | 0.700 | 0.461 | 0.686 | 3 (0.037%; 0.008% to 0.107%) |
+| PGD | 0.05 | 8,198 | 0.648 [0.643, 0.652] | 0.690 | 0.454 | 0.680 | 4 (0.049%; 0.013% to 0.125%) |
 
-No IoU or correlation value was undefined. Example before/after pairs, chosen by fixed rules (highest, median and lowest SSIM), are in `results/gallery/attack_examples_n1000.png`, including one deceptive case.
+Paired tests use the same images across conditions (images successfully attacked in both). The difference is in SSIM; p-values are Wilcoxon signed-rank, Holm-adjusted within each hypothesis. With thousands of images almost any difference is "significant", so the intervals matter more than the p-values.
 
-Descriptive observations (subset only; no significance tests or confidence intervals yet, those come in Checkpoint 5):
+| Hypothesis | Comparison | Paired images | Mean difference [95% CI] | Holm p |
+|---|---|---|---|---|
+| H1 strength | FGSM: SSIM at eps 0.03 minus eps 0.01 | 6,287 | -0.0351 [-0.0406, -0.0297] | < 0.001 |
+| H1 strength | FGSM: SSIM at eps 0.05 minus eps 0.03 | 7,292 | -0.0499 [-0.0554, -0.0444] | < 0.001 |
+| H1 strength | FGSM: SSIM at eps 0.05 minus eps 0.01 | 6,167 | -0.0824 [-0.0899, -0.0750] | < 0.001 |
+| H1 strength | PGD: SSIM at eps 0.03 minus eps 0.01 | 8,011 | +0.0246 [+0.0215, +0.0277] | < 0.001 |
+| H1 strength | PGD: SSIM at eps 0.05 minus eps 0.03 | 8,198 | -0.0073 [-0.0096, -0.0051] | < 0.001 |
+| H1 strength | PGD: SSIM at eps 0.05 minus eps 0.01 | 8,011 | +0.0173 [+0.0136, +0.0211] | < 0.001 |
+| H2 attack type | eps 0.01: SSIM under PGD minus FGSM | 6,362 | +0.1041 [+0.0999, +0.1083] | < 0.001 |
+| H2 attack type | eps 0.03: SSIM under PGD minus FGSM | 7,479 | +0.1541 [+0.1484, +0.1597] | < 0.001 |
+| H2 attack type | eps 0.05: SSIM under PGD minus FGSM | 7,531 | +0.2015 [+0.1950, +0.2078] | < 0.001 |
 
-- Attacked explanations are far less similar to the clean ones (median SSIM 0.48 to 0.69) than explanations under random noise of the same per-pixel size (median 0.994).
-- FGSM: mean SSIM falls as epsilon rises (0.525, 0.487, 0.439). PGD shows no downward trend (0.627, 0.653, 0.646).
-- At every epsilon, PGD explanations stay more similar to the clean ones than FGSM explanations do.
-- Only 3 of 5,050 attacked explanations (0.06%) reach the deceptive threshold, all from PGD. Pairs with SSIM >= 0.9 are more common for PGD (5.6% to 7.0%) than FGSM (0.6% to 3.0%).
-- IoU and correlation order the configurations the same way SSIM does.
+What the data show (this controlled setting only):
+
+- **H1 (similarity falls as strength rises): supported for FGSM, not for PGD.** FGSM mean SSIM falls at every step (0.512, 0.493, 0.440). PGD does not fall: it rises from epsilon 0.01 to 0.03, dips slightly from 0.03 to 0.05, and ends higher than it started.
+- **H2 (PGD and FGSM differ): supported.** At every epsilon PGD explanations stay more similar to the clean ones than FGSM explanations, and the gap widens with strength (+0.104, +0.154, +0.202).
+- **H3 (some attacks keep a highly similar explanation): supported, but the effect is very rare.** 13 of 45,779 attacked pairs (0.028%), from 10 distinct images, reach the threshold; all but one are PGD. Their IoU is at least 0.78 and Pearson correlation at least 0.987, so the supporting metrics agree. Per-case details: `results/tables/analysis_n9000_deceptive_cases.csv`; examples: `results/gallery/attack_examples_n9000.png`.
+- The attacked explanations are far less similar to the clean ones (median SSIM 0.49 to 0.70) than explanations under random noise of the same per-pixel size (median 0.994).
+- IoU and correlation order the six configurations the same way SSIM does.
+- **Exploratory, found after seeing the results (not a pre-set test):** truck<->automobile confusions are 12.8% of all successful attacks but 11 of the 13 deceptive cases. The deceptive rate is 0.188% within those confusions versus 0.005% for all other attacks (intervals do not overlap). A plausible reading is that explanations for two visually similar classes naturally highlight the same object region, so a similar heatmap may say little about the attack itself. This rests on 13 cases and was not tested in advance.
 
 ## Limitations
 
@@ -116,7 +130,8 @@ Descriptive observations (subset only; no significance tests or confidence inter
 - The deployed checkpoint came from an unseeded training run (the `--seed` option was added afterwards), so retraining will give slightly different numbers.
 - The checkpoint epoch was selected by test accuracy on the same test set that supplies the calibration and evaluation images, so the reported test accuracy is slightly optimistic.
 - The threshold depends on the chosen noise model (random sign noise at 0.01).
-- The pipeline results so far use a 1,000-image subset and a single attack seed, with no confidence intervals.
+- Each configuration was run with a single attack seed (PGD uses a random start), so run-to-run variation from the seed is not measured. The intervals above reflect sampling over images only.
+- The same images are re-used across the six configurations, so results across configurations are not independent samples (the paired tests account for this by comparing the same images).
 - The explained class for an attacked image is the model's (wrong) top-1 prediction. Heatmaps for the original class under attack were not examined. A different noise model would give a different threshold.
 
 ## Repository layout
@@ -129,6 +144,7 @@ src/metrics.py        SSIM (primary), IoU of top regions and Pearson correlation
 src/calibration.py    held-out split, noise-floor distribution, locked threshold
 src/attacks.py        FGSM/PGD evaluation
 src/pipeline.py       attack -> explain -> compare, deceptive flag against the locked threshold
+src/analyze.py        per-configuration statistics, hypothesis tests, charts
 results/              logs, charts, gallery, calibration, tables (checkpoint weights are not committed)
 reports/              progress reports
 ```
